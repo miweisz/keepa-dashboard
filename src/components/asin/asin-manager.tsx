@@ -12,7 +12,7 @@ import { TrackedProduct } from "@/hooks/use-asin-store";
 interface AsinManagerProps {
   asins: string[];
   onAdd: (asins: string[]) => void;
-  onAddProducts?: (products: TrackedProduct[]) => void;
+  onAddProducts?: (products: Omit<TrackedProduct, "domains" | "officialListPriceGBP">[]) => void;
   onRemove: (asin: string) => void;
   onClearAll: () => void;
 }

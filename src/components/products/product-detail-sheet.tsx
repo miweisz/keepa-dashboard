@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { DashboardProduct } from "@/types/product";
 import { ExternalLink } from "lucide-react";
+import { getCurrencySymbol } from "@/lib/keepa/constants";
 
 interface ProductDetailSheetProps {
   product: DashboardProduct | null;
@@ -17,12 +18,12 @@ interface ProductDetailSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function PriceRow({ label, value }: { label: string; value: number | null }) {
+function PriceRow({ label, value, symbol = "€" }: { label: string; value: number | null; symbol?: string }) {
   return (
     <div className="flex justify-between py-1">
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="text-sm font-medium">
-        {value !== null ? `$${value.toFixed(2)}` : "—"}
+        {value !== null ? `${symbol}${value.toFixed(2)}` : "—"}
       </span>
     </div>
   );
@@ -50,6 +51,7 @@ export function ProductDetailSheet({
     { 1: "com", 2: "co.uk", 3: "de", 4: "fr", 5: "co.jp", 6: "ca", 8: "it", 9: "es" }[
       product.domain
     ] ?? "com";
+  const symbol = getCurrencySymbol(product.domain);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -106,11 +108,11 @@ export function ProductDetailSheet({
           <section>
             <h3 className="text-sm font-semibold mb-2">Prix</h3>
             <div className="rounded-lg border p-3 space-y-0.5">
-              <PriceRow label="Prix Amazon" value={product.amazonPrice} />
-              <PriceRow label="List Price" value={product.listPrice} />
-              <PriceRow label="Nouveau (marketplace)" value={product.newPrice} />
-              <PriceRow label="Occasion" value={product.usedPrice} />
-              <PriceRow label="FBA" value={product.fbaPrice} />
+              <PriceRow label="Prix Amazon" value={product.amazonPrice} symbol={symbol} />
+              <PriceRow label="List Price" value={product.listPrice} symbol={symbol} />
+              <PriceRow label="Nouveau (marketplace)" value={product.newPrice} symbol={symbol} />
+              <PriceRow label="Occasion" value={product.usedPrice} symbol={symbol} />
+              <PriceRow label="FBA" value={product.fbaPrice} symbol={symbol} />
             </div>
           </section>
 
@@ -120,9 +122,9 @@ export function ProductDetailSheet({
           <section>
             <h3 className="text-sm font-semibold mb-2">BuyBox</h3>
             <div className="rounded-lg border p-3 space-y-0.5">
-              <PriceRow label="Prix" value={product.buyBoxPrice} />
-              <PriceRow label="Livraison" value={product.buyBoxShipping} />
-              <PriceRow label="Total" value={product.buyBoxTotal} />
+              <PriceRow label="Prix" value={product.buyBoxPrice} symbol={symbol} />
+              <PriceRow label="Livraison" value={product.buyBoxShipping} symbol={symbol} />
+              <PriceRow label="Total" value={product.buyBoxTotal} symbol={symbol} />
               <InfoRow label="Vendeur" value={product.buyBoxSellerName} />
               <div className="flex justify-between py-1">
                 <span className="text-sm text-muted-foreground">Type</span>
@@ -188,9 +190,9 @@ export function ProductDetailSheet({
           <section>
             <h3 className="text-sm font-semibold mb-2">Frais FBA</h3>
             <div className="rounded-lg border p-3 space-y-0.5">
-              <PriceRow label="Pick & Pack" value={product.fbaPickAndPackFee} />
-              <PriceRow label="Stockage" value={product.fbaStorageFee} />
-              <PriceRow label="Total FBA" value={product.fbaTotalFee} />
+              <PriceRow label="Pick & Pack" value={product.fbaPickAndPackFee} symbol={symbol} />
+              <PriceRow label="Stockage" value={product.fbaStorageFee} symbol={symbol} />
+              <PriceRow label="Total FBA" value={product.fbaTotalFee} symbol={symbol} />
               <InfoRow
                 label="Commission referral"
                 value={product.referralFeePercent ? `${product.referralFeePercent}%` : null}
@@ -204,8 +206,8 @@ export function ProductDetailSheet({
           <section>
             <h3 className="text-sm font-semibold mb-2">Moyennes de prix</h3>
             <div className="rounded-lg border p-3 space-y-0.5">
-              <PriceRow label="Prix moyen 30j" value={product.avgPrice30} />
-              <PriceRow label="Prix moyen 90j" value={product.avgPrice90} />
+              <PriceRow label="Prix moyen 30j" value={product.avgPrice30} symbol={symbol} />
+              <PriceRow label="Prix moyen 90j" value={product.avgPrice90} symbol={symbol} />
             </div>
           </section>
 

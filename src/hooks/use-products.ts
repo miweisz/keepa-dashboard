@@ -4,20 +4,20 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { DashboardProduct } from "@/types/product";
 
 /**
- * Continuous rolling refresh with localStorage cache:
- * - On mount, loads cached products from localStorage for instant display
+ * Continuous rolling refresh with server-side KV cache:
+ * - On mount, loads cached products from KV via API for instant display
  * - Loops forever through all (domain × batch) combinations
  * - Checks tokens before each batch, waits if needed
  * - Merges results incrementally (updates existing products, adds new)
- * - Persists products to localStorage after each batch
+ * - Persists products to KV after each batch
  * - Never stops unless paused or cancelled
  */
 
+const BASE_PATH = "/amazon-tracker";
 const BATCH_SIZE = 20;
 const TOKENS_PER_PRODUCT = 6;
 const TOKEN_SAFETY_MARGIN = 5;
 const DELAY_BETWEEN_BATCHES = 500; // ms
-const PRODUCTS_CACHE_KEY = "keepa-products-cache";
 
 interface BatchProgress {
   total: number;
@@ -56,7 +56,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 }
 
 async function checkTokens(): Promise<{ tokensLeft: number; refillRate: number }> {
-  const res = await fetch("/api/keepa/tokens");
+  const res = await fetch(`${BASE_PATH}/api/keepa/tokens`);
   if (!res.ok) throw new Error("Failed to check token status");
   const data = await res.json();
   return { tokensLeft: data.tokensLeft ?? 0, refillRate: data.refillRate ?? 20 };
@@ -71,29 +71,17 @@ function productKey(p: DashboardProduct): string {
   return `${p.asin}::${p.domain}`;
 }
 
-/** Load cached products from localStorage */
-function loadCachedProducts(): DashboardProduct[] {
-  try {
-    const cached = localStorage.getItem(PRODUCTS_CACHE_KEY);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return [];
-}
-
-/** Save products to localStorage */
-function saveCachedProducts(products: DashboardProduct[]): void {
-  try {
-    localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(products));
-  } catch {
-    // localStorage full or unavailable — ignore
-  }
+/** Save products to server (debounced via caller) */
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+function debouncedSaveToServer(products: DashboardProduct[]): void {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    fetch(`${BASE_PATH}/api/products-cache`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(products),
+    }).catch(() => {});
+  }, 2000); // Save every 2s at most to avoid hammering KV
 }
 
 export function useProducts(): UseProductsResult {
@@ -108,20 +96,32 @@ export function useProducts(): UseProductsResult {
   const runningRef = useRef(false);
   const isInitializedRef = useRef(false);
 
-  // Load cached products on mount
+  // Load cached products from server on mount
   useEffect(() => {
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
-    const cached = loadCachedProducts();
-    if (cached.length > 0) {
-      setProducts(cached);
-    }
+
+    fetch(`${BASE_PATH}/api/products-cache`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          // Ensure backwards compatibility with cached data missing new fields
+          const normalized = data.map((p: DashboardProduct) => ({
+            ...p,
+            allImageUrls: p.allImageUrls ?? [],
+            features: p.features ?? [],
+            variation: p.variation ?? null,
+          }));
+          setProducts(normalized);
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  // Persist products to localStorage whenever they change
+  // Persist products to server whenever they change
   useEffect(() => {
-    if (products.length > 0) {
-      saveCachedProducts(products);
+    if (products.length > 0 && isInitializedRef.current) {
+      debouncedSaveToServer(products);
     }
   }, [products]);
 
@@ -210,7 +210,7 @@ export function useProducts(): UseProductsResult {
                 });
 
                 // Fetch batch
-                const response = await fetch("/api/keepa/products", {
+                const response = await fetch(`${BASE_PATH}/api/keepa/products`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ asins: batch, domain }),
@@ -230,12 +230,30 @@ export function useProducts(): UseProductsResult {
                   throw new Error(data.error || `HTTP ${response.status}`);
                 }
 
-                // Merge products incrementally
-                const newProducts: DashboardProduct[] = data.products;
+                // Merge products incrementally, preserving resolved seller names
+                const newProducts: DashboardProduct[] = (data.products ?? []).map((p: DashboardProduct) => ({
+                  ...p,
+                  allImageUrls: p.allImageUrls ?? [],
+                  features: p.features ?? [],
+                }));
                 setProducts((prev) => {
                   const map = new Map(prev.map((p) => [productKey(p), p]));
                   for (const np of newProducts) {
-                    map.set(productKey(np), np);
+                    const key = productKey(np);
+                    const existing = map.get(key);
+                    // If the new data has an unresolved seller name (same as ID),
+                    // but we already had a resolved name, keep it
+                    if (
+                      existing &&
+                      np.buyBoxSellerId &&
+                      np.buyBoxSellerName === np.buyBoxSellerId &&
+                      existing.buyBoxSellerName &&
+                      existing.buyBoxSellerName !== existing.buyBoxSellerId
+                    ) {
+                      map.set(key, { ...np, buyBoxSellerName: existing.buyBoxSellerName });
+                    } else {
+                      map.set(key, np);
+                    }
                   }
                   return Array.from(map.values());
                 });

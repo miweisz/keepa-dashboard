@@ -36,9 +36,8 @@ yarn-error.log*
 # vercel
 .vercel
 
-# cloudflare
-.open-next/
-.wrangler/
+# data (JSON file store — persisted on VPS, not in git)
+/data/
 
 # typescript
 *.tsbuildinfo

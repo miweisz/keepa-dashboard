@@ -4,6 +4,11 @@ export interface DashboardProduct {
   title: string;
   brand: string | null;
   imageUrl: string | null;
+  allImageUrls: string[];
+  features: string[];
+  variation: string | null;
+  parentAsin: string | null;
+  variationAttributes: { dimension: string; value: string }[];
   category: string | null;
 
   // Official Shapeheart price

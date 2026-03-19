@@ -82,6 +82,7 @@ const sellerNameCache = new Map<string, string>();
 const AMAZON_SELLER_IDS = new Set([
   "ATVPDKIKX0DER",   // US
   "A13V1IB3VIYZZH",  // FR
+  "A1X6FK5RDHNB96",  // FR (alt)
   "A1RKKUPIHCS9HS",  // ES
   "A1PA6795UKMFR9",  // DE
   "A11IL2PNWYBER7",  // IT

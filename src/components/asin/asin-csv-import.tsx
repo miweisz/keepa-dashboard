@@ -7,7 +7,7 @@ import { extractProductsFromCsv, CsvParseResult } from "@/lib/csv-parser";
 import { TrackedProduct } from "@/hooks/use-asin-store";
 
 interface AsinCsvImportProps {
-  onImport: (products: TrackedProduct[]) => void;
+  onImport: (products: Omit<TrackedProduct, "domains" | "officialListPriceGBP">[]) => void;
   existingAsins: string[];
 }
 

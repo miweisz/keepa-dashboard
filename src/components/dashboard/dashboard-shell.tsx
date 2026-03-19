@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import {
   RefreshCw,
   AlertCircle,
-  Zap,
   Package,
   X,
-  Pause,
   Play,
 } from "lucide-react";
 import { useAsinStore } from "@/hooks/use-asin-store";
@@ -22,7 +20,8 @@ import { DashboardProduct } from "@/types/product";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 
-const DEFAULT_DOMAINS = [4];
+/** All EU domains — we always fetch ALL of them */
+const ALL_DOMAINS = [4, 9, 3, 8, 2]; // FR, ES, DE, IT, UK
 
 export function DashboardShell() {
   const { products: trackedProducts, asins, isLoaded } = useAsinStore();
@@ -30,68 +29,79 @@ export function DashboardShell() {
     products,
     isLoading,
     error,
-    tokensLeft,
-    tokensConsumed,
     progress,
     isRunning,
     startContinuousRefresh,
     stopRefresh,
   } = useProducts();
 
-  // Build a lookup map from tracked products: asin -> { sku, officialListPrice }
+  // Build a lookup map from tracked products: asin -> { sku, officialListPrice, officialListPriceGBP, domains }
   const trackedMap = useMemo(() => {
-    const map = new Map<string, { sku: string; officialListPrice: number | null }>();
+    const map = new Map<string, { sku: string; officialListPrice: number | null; officialListPriceGBP: number | null; domains: number[] }>();
     for (const tp of trackedProducts) {
-      map.set(tp.asin, { sku: tp.sku, officialListPrice: tp.officialListPrice });
+      map.set(tp.asin, {
+        sku: tp.sku,
+        officialListPrice: tp.officialListPrice,
+        officialListPriceGBP: tp.officialListPriceGBP,
+        domains: tp.domains ?? ALL_DOMAINS,
+      });
     }
     return map;
   }, [trackedProducts]);
 
-  // Enrich API products with SKU + officialListPrice from the ASIN store
+  // Enrich API products with SKU + officialListPrice, filter out disabled domains
   const enrichedProducts = useMemo(() => {
-    return products.map((p) => {
-      const tracked = trackedMap.get(p.asin);
-      return {
-        ...p,
-        sku: tracked?.sku ?? "",
-        officialListPrice: tracked?.officialListPrice ?? null,
-      };
-    });
+    return products
+      .filter((p) => {
+        const tracked = trackedMap.get(p.asin);
+        return tracked ? tracked.domains.includes(p.domain) : true;
+      })
+      .map((p) => {
+        const tracked = trackedMap.get(p.asin);
+        // Use GBP price for UK (domain 2), EUR price for all others
+        const officialPrice = p.domain === 2
+          ? (tracked?.officialListPriceGBP ?? null)
+          : (tracked?.officialListPrice ?? null);
+        return {
+          ...p,
+          sku: tracked?.sku ?? "",
+          officialListPrice: officialPrice,
+        };
+      });
   }, [products, trackedMap]);
 
-  const [domains, setDomains] = useState<number[]>(DEFAULT_DOMAINS);
+  // Visual filter: which domains to DISPLAY (always fetch all)
+  const [visibleDomains, setVisibleDomains] = useState<number[]>(ALL_DOMAINS);
   const [selectedProduct, setSelectedProduct] = useState<DashboardProduct | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Auto-start continuous refresh once loaded
+  // Auto-start continuous refresh once loaded — always all domains
   useEffect(() => {
     if (!isLoaded || asins.length === 0 || isRunning) return;
     const timer = setTimeout(() => {
-      startContinuousRefresh(asins, domains);
+      startContinuousRefresh(asins, ALL_DOMAINS);
     }, 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded]);
 
-  // Restart refresh when domains change (stop current, start new)
+  // Country picker only changes the visual filter, does NOT restart refresh
   const handleDomainsChange = (newDomains: number[]) => {
-    setDomains(newDomains);
-    if (isRunning) {
-      stopRefresh();
-      // Small delay to let the stop propagate
-      setTimeout(() => {
-        startContinuousRefresh(asins, newDomains);
-      }, 300);
-    }
+    setVisibleDomains(newDomains);
   };
 
   const handleToggleRefresh = () => {
     if (isRunning) {
       stopRefresh();
     } else {
-      startContinuousRefresh(asins, domains);
+      startContinuousRefresh(asins, ALL_DOMAINS);
     }
   };
+
+  // Filter displayed products by visible domains
+  const filteredProducts = useMemo(() => {
+    return enrichedProducts.filter((p) => visibleDomains.includes(p.domain));
+  }, [enrichedProducts, visibleDomains]);
 
   const handleRowClick = (product: DashboardProduct) => {
     setSelectedProduct(product);
@@ -120,7 +130,7 @@ export function DashboardShell() {
       <div className="flex items-center justify-between flex-wrap gap-3 bg-white rounded-xl border border-border/60 px-4 py-3 shadow-sm">
         {/* Left */}
         <div className="flex items-center gap-3">
-          <CountryPicker selected={domains} onChange={handleDomainsChange} />
+          <CountryPicker selected={visibleDomains} onChange={handleDomainsChange} />
 
           <div className="h-6 w-px bg-border" />
 
@@ -149,18 +159,14 @@ export function DashboardShell() {
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 isRunning
-                  ? progress?.waitingForTokens
-                    ? "bg-amber-500 animate-pulse"
-                    : "bg-emerald-500 animate-pulse"
+                  ? "bg-emerald-500 animate-pulse"
                   : "bg-muted-foreground/40"
               }`}
             />
             {isRunning
-              ? progress?.waitingForTokens
-                ? "En attente"
-                : isLoading
-                  ? "Synchronisation"
-                  : "Actif"
+              ? isLoading
+                ? "Synchronisation"
+                : "Actif"
               : "Arrêté"}
             {progress && (
               <span className="text-muted-foreground ml-1">
@@ -170,27 +176,10 @@ export function DashboardShell() {
           </div>
         </div>
 
-        {/* Right */}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          {tokensLeft !== null && (
-            <div className={`flex items-center gap-1.5 font-medium ${
-              tokensLeft < 100 ? "text-red-600" : "text-muted-foreground"
-            }`}>
-              <Zap className="h-3 w-3" />
-              <span className="font-mono tabular-nums">
-                {tokensLeft.toLocaleString()}
-              </span>
-              <span className="font-normal">tokens</span>
-              {tokensConsumed != null && tokensConsumed > 0 && (
-                <span className="text-muted-foreground/60">(-{tokensConsumed})</span>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* ── Progress bar ── */}
-      {isLoading && progress && (
+      {isLoading && progress && !progress.waitingForTokens && (
         <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-primary/5">
           <div
             className="absolute bottom-0 left-0 h-1 bg-primary/60 transition-all duration-500 ease-out"
@@ -198,27 +187,12 @@ export function DashboardShell() {
           />
           <div className="flex items-center justify-between p-3.5">
             <div className="flex items-center gap-3">
-              {progress.waitingForTokens ? (
-                <Pause className="h-4 w-4 text-amber-600" />
-              ) : (
-                <RefreshCw className="h-4 w-4 animate-spin text-primary" />
-              )}
+              <RefreshCw className="h-4 w-4 animate-spin text-primary" />
               <div>
                 <p className="text-sm font-medium text-foreground">
-                  {progress.waitingForTokens ? (
-                    <>
-                      En attente de tokens…{" "}
-                      <span className="font-mono text-amber-600">
-                        {progress.waitSeconds}s
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      Récupération{" "}
-                      <span className="font-semibold">{progress.currentDomain}</span>
-                      {" · "}batch {progress.currentBatch}
-                    </>
-                  )}
+                  Récupération{" "}
+                  <span className="font-semibold">{progress.currentDomain}</span>
+                  {" · "}batch {progress.currentBatch}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {progress.completed}/{progress.total} batches · {progressPercent}%
@@ -250,14 +224,14 @@ export function DashboardShell() {
       )}
 
       {/* ── Stats ── */}
-      {enrichedProducts.length > 0 && <StatsCards products={enrichedProducts} />}
+      {filteredProducts.length > 0 && <StatsCards products={filteredProducts} />}
 
       {/* ── Table ── */}
-      {asins.length > 0 && enrichedProducts.length > 0 && (
+      {asins.length > 0 && filteredProducts.length > 0 && (
         <div className="bg-white rounded-xl border border-border/60 shadow-sm overflow-hidden">
           <DataTable
             columns={columns}
-            data={enrichedProducts}
+            data={filteredProducts}
             onRowClick={handleRowClick}
           />
         </div>
@@ -283,7 +257,7 @@ export function DashboardShell() {
       )}
 
       {/* ── Empty: ASINs but no data ── */}
-      {asins.length > 0 && enrichedProducts.length === 0 && !isLoading && !error && (
+      {asins.length > 0 && filteredProducts.length === 0 && !isLoading && !error && (
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-dashed border-border">
           <div className="rounded-2xl bg-muted p-5 mb-5">
             <RefreshCw className="h-10 w-10 text-muted-foreground" />

@@ -33,6 +33,9 @@ export interface KeepaProduct {
   buyBoxSellerIdHistory: string[] | null;
   fbaFees: FBAFees | null;
   referralFeePercentage: number;
+  features: string[] | null;
+  description: string | null;
+  variationCSV: string | null;
   monthlySold: number;
   salesRanks: Record<string, number[]> | null;
   coupon: number[] | null;

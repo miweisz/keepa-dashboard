@@ -17,6 +17,9 @@ export function StatsCards({ products }: StatsCardsProps) {
   const uniqueAsins = new Set(products.map((p) => p.asin)).size;
   const count = products.length;
 
+  // Tolérance de 4 centimes pour les comparaisons de prix (ex: 9,95 vs 9,99 = OK)
+  const PRICE_TOLERANCE = 0.04;
+
   // Products with both BuyBox and official price
   const withBothBuyBoxAndOfficial = products.filter(
     (p) => p.buyBoxTotal !== null && p.officialListPrice !== null && p.officialListPrice > 0
@@ -24,12 +27,12 @@ export function StatsCards({ products }: StatsCardsProps) {
 
   // Prix Buy Box OK = BuyBox <= prix officiel
   const buyBoxOk = withBothBuyBoxAndOfficial.filter(
-    (p) => (p.buyBoxTotal ?? 0) <= (p.officialListPrice ?? 0)
+    (p) => (p.buyBoxTotal ?? 0) <= (p.officialListPrice ?? 0) + PRICE_TOLERANCE
   );
 
-  // Buy Box à rectifier = BuyBox > prix officiel OU vendeur ≠ Amazon
+  // Buy Box à rectifier = BuyBox > prix officiel + tolérance OU vendeur ≠ Amazon
   const buyBoxToFix = withBothBuyBoxAndOfficial.filter(
-    (p) => (p.buyBoxTotal ?? 0) > (p.officialListPrice ?? 0) || p.buyBoxSellerName !== "Amazon"
+    (p) => (p.buyBoxTotal ?? 0) > (p.officialListPrice ?? 0) + PRICE_TOLERANCE || p.buyBoxSellerName !== "Amazon"
   );
 
   // List Price > Prix Officiel
@@ -37,7 +40,7 @@ export function StatsCards({ products }: StatsCardsProps) {
     (p) => p.listPrice !== null && p.officialListPrice !== null && p.officialListPrice > 0
   );
   const listPriceAboveOfficial = withBothListAndOfficial.filter(
-    (p) => (p.listPrice ?? 0) > (p.officialListPrice ?? 0)
+    (p) => (p.listPrice ?? 0) > (p.officialListPrice ?? 0) + PRICE_TOLERANCE
   );
 
   const stats = [

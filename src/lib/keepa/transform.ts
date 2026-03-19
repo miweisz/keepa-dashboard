@@ -19,6 +19,38 @@ function getImageUrl(imagesCSV: string | null): string | null {
   return `https://images-na.ssl-images-amazon.com/images/I/${firstImage}`;
 }
 
+/**
+ * Parse Keepa variationCSV into structured attributes.
+ * Format: "dimension1,value1,dimension2,value2,..."
+ * e.g. "Size,XL,Color,Black" → [{ dimension: "Size", value: "XL" }, { dimension: "Color", value: "Black" }]
+ */
+function parseVariationAttributes(variationCSV: string | null): { dimension: string; value: string }[] {
+  if (!variationCSV) return [];
+  const parts = variationCSV.split(",");
+  const attrs: { dimension: string; value: string }[] = [];
+  for (let i = 0; i < parts.length - 1; i += 2) {
+    const dimension = parts[i]?.trim();
+    const value = parts[i + 1]?.trim();
+    if (dimension && value) {
+      attrs.push({ dimension, value });
+    }
+  }
+  return attrs;
+}
+
+function formatVariation(attrs: { dimension: string; value: string }[]): string | null {
+  if (attrs.length === 0) return null;
+  return attrs.map((a) => `${a.dimension}: ${a.value}`).join(" | ");
+}
+
+function getAllImageUrls(imagesCSV: string | null): string[] {
+  if (!imagesCSV) return [];
+  return imagesCSV
+    .split(",")
+    .filter(Boolean)
+    .map((id) => `https://images-na.ssl-images-amazon.com/images/I/${id}`);
+}
+
 export function transformKeepaProduct(
   raw: KeepaProduct,
   domain: number
@@ -74,6 +106,7 @@ export function transformKeepaProduct(
     const amazonSellerIds = new Set([
       "ATVPDKIKX0DER",   // US
       "A13V1IB3VIYZZH",  // FR
+      "A1X6FK5RDHNB96",  // FR (alt)
       "A1RKKUPIHCS9HS",  // ES
       "A1PA6795UKMFR9",  // DE
       "A11IL2PNWYBER7",  // IT
@@ -98,6 +131,11 @@ export function transformKeepaProduct(
     brand: raw.brand ?? null,
     officialListPrice: null,
     imageUrl: getImageUrl(raw.imagesCSV),
+    allImageUrls: getAllImageUrls(raw.imagesCSV),
+    features: raw.features ?? [],
+    variationAttributes: parseVariationAttributes(raw.variationCSV),
+    variation: formatVariation(parseVariationAttributes(raw.variationCSV)),
+    parentAsin: raw.parentAsin ?? null,
     category,
 
     rating,

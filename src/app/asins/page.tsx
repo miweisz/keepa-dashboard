@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAsinStore, TrackedProduct } from "@/hooks/use-asin-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,9 +17,18 @@ import {
   X,
   Package,
   Search,
+  Zap,
 } from "lucide-react";
 import { extractProductsFromCsv, CsvParsedProduct } from "@/lib/csv-parser";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const DOMAIN_FLAGS: { id: number; flag: string; code: string }[] = [
+  { id: 4, flag: "\u{1F1EB}\u{1F1F7}", code: "FR" },
+  { id: 9, flag: "\u{1F1EA}\u{1F1F8}", code: "ES" },
+  { id: 3, flag: "\u{1F1E9}\u{1F1EA}", code: "DE" },
+  { id: 8, flag: "\u{1F1EE}\u{1F1F9}", code: "IT" },
+  { id: 2, flag: "\u{1F1EC}\u{1F1E7}", code: "UK" },
+];
 
 export default function AsinsPage() {
   const {
@@ -31,6 +40,8 @@ export default function AsinsPage() {
     removeAsin,
     updateSku,
     updateListPrice,
+    updateListPriceGBP,
+    updateDomains,
     clearAll,
   } = useAsinStore();
 
@@ -38,7 +49,7 @@ export default function AsinsPage() {
   const [inputErrors, setInputErrors] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingAsin, setEditingAsin] = useState<string | null>(null);
-  const [editField, setEditField] = useState<"sku" | "price">("sku");
+  const [editField, setEditField] = useState<"sku" | "price" | "priceGBP">("sku");
   const [editValue, setEditValue] = useState("");
 
   // CSV
@@ -52,6 +63,25 @@ export default function AsinsPage() {
   } | null>(null);
   const [csvFileName, setCsvFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Token status
+  const [tokensLeft, setTokensLeft] = useState<number | null>(null);
+  const [refillRate, setRefillRate] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchTokens = () => {
+      fetch("/amazon-tracker/api/keepa/tokens")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.tokensLeft != null) setTokensLeft(data.tokensLeft);
+          if (data.refillRate != null) setRefillRate(data.refillRate);
+        })
+        .catch(() => {});
+    };
+    fetchTokens();
+    const interval = setInterval(fetchTokens, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Add ASINs manually
   const handleAdd = () => {
@@ -122,7 +152,7 @@ export default function AsinsPage() {
   };
 
   // Edit inline
-  const startEdit = (asin: string, field: "sku" | "price", currentValue: string) => {
+  const startEdit = (asin: string, field: "sku" | "price" | "priceGBP", currentValue: string) => {
     setEditingAsin(asin);
     setEditField(field);
     setEditValue(currentValue);
@@ -132,6 +162,9 @@ export default function AsinsPage() {
     if (!editingAsin) return;
     if (editField === "sku") {
       updateSku(editingAsin, editValue.trim());
+    } else if (editField === "priceGBP") {
+      const num = parseFloat(editValue.replace(",", "."));
+      updateListPriceGBP(editingAsin, isNaN(num) ? null : num);
     } else {
       const num = parseFloat(editValue.replace(",", "."));
       updateListPrice(editingAsin, isNaN(num) ? null : num);
@@ -160,10 +193,28 @@ export default function AsinsPage() {
     <div className="container mx-auto py-8 px-4 max-w-[1400px]">
       {/* Header */}
       <div className="mb-8">
-        <h2 className="text-3xl font-bold tracking-tight">ASINs à suivre</h2>
-        <p className="text-muted-foreground mt-1">
-          Gérez la liste des produits Amazon, leur SKU Shapeheart et prix officiel.
-        </p>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">ASINs à suivre</h2>
+            <p className="text-muted-foreground mt-1">
+              Gérez la liste des produits Amazon, leur SKU Shapeheart et prix officiel.
+            </p>
+          </div>
+          {tokensLeft !== null && (
+            <div className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border ${
+              tokensLeft < 100 ? "border-red-200 bg-red-50 text-red-600" : "bg-white"
+            }`}>
+              <Zap className="h-3 w-3" />
+              <span className="font-mono tabular-nums">
+                {tokensLeft.toLocaleString()}
+              </span>
+              <span className="font-normal">tokens</span>
+              {refillRate !== null && (
+                <span className="text-muted-foreground font-normal">· {refillRate}/min</span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -357,10 +408,12 @@ export default function AsinsPage() {
               ) : (
                 <div className="border rounded-lg overflow-hidden">
                   {/* Table header */}
-                  <div className="grid grid-cols-[1fr_1.2fr_0.8fr_auto] gap-2 px-4 py-2.5 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <div className="grid grid-cols-[1fr_1.2fr_0.8fr_0.8fr_auto_auto] gap-2 px-4 py-2.5 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     <span>ASIN</span>
                     <span>SKU Shapeheart</span>
-                    <span>Prix Officiel</span>
+                    <span>Prix EUR (€)</span>
+                    <span>Prix UK (£)</span>
+                    <span>Pays</span>
                     <span className="w-8" />
                   </div>
 
@@ -369,7 +422,7 @@ export default function AsinsPage() {
                     {filteredProducts.map((product) => (
                       <div
                         key={product.asin}
-                        className="grid grid-cols-[1fr_1.2fr_0.8fr_auto] gap-2 px-4 py-2.5 items-center hover:bg-muted/30 transition-colors"
+                        className="grid grid-cols-[1fr_1.2fr_0.8fr_0.8fr_auto_auto] gap-2 px-4 py-2.5 items-center hover:bg-muted/30 transition-colors"
                       >
                         {/* ASIN */}
                         <div>
@@ -463,6 +516,81 @@ export default function AsinsPage() {
                               <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                             </button>
                           )}
+                        </div>
+
+                        {/* Prix UK (£) */}
+                        <div>
+                          {editingAsin === product.asin && editField === "priceGBP" ? (
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") saveEdit();
+                                  if (e.key === "Escape") setEditingAsin(null);
+                                }}
+                                className="h-7 text-sm font-mono w-24"
+                                autoFocus
+                                placeholder="24.95"
+                                type="text"
+                                inputMode="decimal"
+                              />
+                              <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={saveEdit}>
+                                <Check className="h-3.5 w-3.5 text-green-600" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setEditingAsin(null)}>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <button
+                              className="flex items-center gap-1.5 text-sm group"
+                              onClick={() =>
+                                startEdit(
+                                  product.asin,
+                                  "priceGBP",
+                                  product.officialListPriceGBP != null ? String(product.officialListPriceGBP) : ""
+                                )
+                              }
+                            >
+                              {product.officialListPriceGBP != null ? (
+                                <span className="font-mono text-foreground">
+                                  £{product.officialListPriceGBP.toFixed(2)}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground italic">Ajouter prix...</span>
+                              )}
+                              <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Pays */}
+                        <div className="flex items-center gap-0.5">
+                          {DOMAIN_FLAGS.map((d) => {
+                            const active = product.domains?.includes(d.id) ?? true;
+                            return (
+                              <button
+                                key={d.id}
+                                onClick={() => {
+                                  const current = product.domains ?? DOMAIN_FLAGS.map((x) => x.id);
+                                  if (active) {
+                                    if (current.length > 1) {
+                                      updateDomains(product.asin, current.filter((id) => id !== d.id));
+                                    }
+                                  } else {
+                                    updateDomains(product.asin, [...current, d.id]);
+                                  }
+                                }}
+                                className={`text-base leading-none p-0.5 rounded transition-opacity ${
+                                  active ? "opacity-100" : "opacity-25 grayscale"
+                                }`}
+                                title={`${d.code} ${active ? "(actif)" : "(désactivé)"}`}
+                              >
+                                {d.flag}
+                              </button>
+                            );
+                          })}
                         </div>
 
                         {/* Delete */}

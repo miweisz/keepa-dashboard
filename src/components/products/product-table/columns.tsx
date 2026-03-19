@@ -7,6 +7,9 @@ import { DataTableColumnHeader } from "./data-table-column-header";
 import { ExternalLink } from "lucide-react";
 import { KEEPA_DOMAINS, getCurrencySymbol } from "@/lib/keepa/constants";
 
+// Tolérance de 4 centimes pour les comparaisons de prix (ex: 9,95 vs 9,99 = OK)
+const PRICE_TOLERANCE = 0.04;
+
 function formatPrice(value: number | null, domain: number = 1): string {
   if (value === null) return "—";
   const symbol = getCurrencySymbol(domain);
@@ -50,6 +53,7 @@ export const columns: ColumnDef<DashboardProduct>[] = [
     },
     enableSorting: false,
     enableResizing: false,
+    enableColumnFilter: false,
     size: 50,
   },
   {
@@ -70,9 +74,7 @@ export const columns: ColumnDef<DashboardProduct>[] = [
         </span>
       );
     },
-    filterFn: (row, id, value: string[]) => {
-      return value.includes(row.getValue(id) as string);
-    },
+    filterFn: "includesString",
     size: 80,
   },
   {
@@ -136,9 +138,7 @@ export const columns: ColumnDef<DashboardProduct>[] = [
       <DataTableColumnHeader column={column} title="Marque" />
     ),
     cell: ({ row }) => row.getValue("brand") ?? "—",
-    filterFn: (row, id, value: string[]) => {
-      return value.includes(row.getValue(id));
-    },
+    filterFn: "includesString",
     size: 120,
   },
   {
@@ -181,7 +181,7 @@ export const columns: ColumnDef<DashboardProduct>[] = [
       const listPrice = row.getValue("listPrice") as number | null;
       const official = row.original.officialListPrice;
       let colorClass = "";
-      if (listPrice !== null && official !== null && official > 0 && listPrice > official) {
+      if (listPrice !== null && official !== null && official > 0 && listPrice > official + PRICE_TOLERANCE) {
         colorClass = "font-medium text-red-600";
       }
       return (
@@ -204,7 +204,7 @@ export const columns: ColumnDef<DashboardProduct>[] = [
       const isAmazon = sellerName === "Amazon";
       let colorClass = "font-medium";
       if (total !== null && official !== null && official > 0) {
-        if (total <= official && isAmazon) {
+        if (total <= official + PRICE_TOLERANCE && isAmazon) {
           colorClass = "font-medium text-emerald-600"; // OK
         } else {
           colorClass = "font-medium text-red-600"; // à rectifier (prix > officiel OU vendeur ≠ Amazon)
@@ -244,9 +244,7 @@ export const columns: ColumnDef<DashboardProduct>[] = [
         </Badge>
       );
     },
-    filterFn: (row, id, value: string[]) => {
-      return value.includes(row.getValue(id));
-    },
+    filterFn: "includesString",
     size: 140,
   },
   {

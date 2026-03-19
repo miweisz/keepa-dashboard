@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { fetchProducts, resolveSellerNames } from "@/lib/keepa/client";
 import { transformKeepaProduct } from "@/lib/keepa/transform";
+import { kvGet, kvPut } from "@/lib/store";
 
 const requestSchema = z.object({
   asins: z
@@ -36,12 +37,42 @@ export async function POST(request: NextRequest) {
       .filter((id): id is string => !!id && id !== "Amazon");
     const uniqueSellerIds = [...new Set(sellerIds)];
 
+    // Load cached seller names from file store
+    let kvSellerCache: Record<string, string> = {};
+    try {
+      const cached = await kvGet("seller-names");
+      if (cached) kvSellerCache = JSON.parse(cached);
+    } catch {}
+
     if (uniqueSellerIds.length > 0) {
-      const sellerNames = await resolveSellerNames(uniqueSellerIds, domain);
-      for (const product of products) {
-        if (product.buyBoxSellerId && sellerNames.has(product.buyBoxSellerId)) {
-          product.buyBoxSellerName = sellerNames.get(product.buyBoxSellerId)!;
+      // Pre-fill from cache
+      const stillUnresolved: string[] = [];
+      for (const id of uniqueSellerIds) {
+        if (kvSellerCache[id]) {
+          for (const product of products) {
+            if (product.buyBoxSellerId === id) {
+              product.buyBoxSellerName = kvSellerCache[id];
+            }
+          }
+        } else {
+          stillUnresolved.push(id);
         }
+      }
+
+      // Resolve remaining via Keepa seller API
+      if (stillUnresolved.length > 0) {
+        const sellerNames = await resolveSellerNames(stillUnresolved, domain);
+        for (const product of products) {
+          if (product.buyBoxSellerId && sellerNames.has(product.buyBoxSellerId)) {
+            const name = sellerNames.get(product.buyBoxSellerId)!;
+            product.buyBoxSellerName = name;
+            if (name !== product.buyBoxSellerId) {
+              kvSellerCache[product.buyBoxSellerId] = name;
+            }
+          }
+        }
+        // Persist updated cache
+        kvPut("seller-names", JSON.stringify(kvSellerCache)).catch(() => {});
       }
     }
 

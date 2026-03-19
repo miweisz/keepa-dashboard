@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ColumnDef,
   ColumnResizeMode,
   ColumnOrderState,
+  ColumnFiltersState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -13,6 +14,7 @@ import {
   SortingState,
   useReactTable,
   GlobalFilterTableState,
+  Column,
 } from "@tanstack/react-table";
 
 import {
@@ -59,10 +61,41 @@ export function DataTable<TData, TValue>({
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnResizeMode] = useState<ColumnResizeMode>("onChange");
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>([]);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitializedRef = useRef(false);
+
+  // Load column order from server on mount
+  useEffect(() => {
+    fetch("/amazon-tracker/api/settings")
+      .then((res) => res.json())
+      .then((settings) => {
+        if (settings.columnOrder && Array.isArray(settings.columnOrder) && settings.columnOrder.length > 0) {
+          setColumnOrder(settings.columnOrder);
+        }
+        isInitializedRef.current = true;
+      })
+      .catch(() => {
+        isInitializedRef.current = true;
+      });
+  }, []);
+
+  // Save column order to server (debounced) when it changes
+  useEffect(() => {
+    if (!isInitializedRef.current || columnOrder.length === 0) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      fetch("/amazon-tracker/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ columnOrder }),
+      }).catch(() => {});
+    }, 500);
+  }, [columnOrder]);
 
   const table = useReactTable({
     data,
@@ -71,10 +104,12 @@ export function DataTable<TData, TValue>({
     state: {
       sorting,
       globalFilter,
+      columnFilters,
       columnOrder,
-    } as GlobalFilterTableState & { sorting: SortingState; columnOrder: ColumnOrderState },
+    } as GlobalFilterTableState & { sorting: SortingState; columnFilters: ColumnFiltersState; columnOrder: ColumnOrderState },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
     onColumnOrderChange: setColumnOrder,
     globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
@@ -82,7 +117,7 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: {
-      pagination: { pageSize: 50 },
+      pagination: { pageSize: 300 },
     },
   });
 
@@ -186,6 +221,22 @@ export function DataTable<TData, TValue>({
                 ))}
               </TableRow>
             ))}
+            {/* Column filter row */}
+            <TableRow className="bg-muted/30 hover:bg-muted/30">
+              {table.getHeaderGroups()[0]?.headers.map((header) => (
+                <TableHead key={`filter-${header.id}`} className="px-1 py-1" style={{ width: header.getSize() }}>
+                  {header.column.getCanFilter() && header.column.id !== "imageUrl" ? (
+                    <input
+                      type="text"
+                      value={(header.column.getFilterValue() as string) ?? ""}
+                      onChange={(e) => header.column.setFilterValue(e.target.value || undefined)}
+                      placeholder="Filtrer..."
+                      className="w-full h-7 px-2 text-xs rounded border border-border/60 bg-white focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
+                    />
+                  ) : null}
+                </TableHead>
+              ))}
+            </TableRow>
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
