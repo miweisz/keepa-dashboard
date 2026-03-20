@@ -26,30 +26,48 @@ const TRACKER_NAV = [
 export function Header() {
   const pathname = usePathname();
 
-  const isHome = pathname === "/";
   // Show tracker nav when on any tracker page
   const isTrackerSection =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/asins") ||
     pathname.startsWith("/content");
 
+  // On home page, logo links to tech.shapeheart.fr; in tracker section, logo links to /amazon-tracker
+  const logoHref = isTrackerSection ? "/" : undefined;
+
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-border/60 shadow-sm">
       <div className="container mx-auto flex h-14 items-center px-6 gap-8">
-        {/* Logo — always links to home */}
-        <Link href="/" className="flex items-center gap-3 shrink-0 group">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-white shadow-sm">
-            <BarChart3 className="h-4 w-4" />
-          </div>
-          <div className="hidden sm:block">
-            <h1 className="text-[13px] font-semibold leading-none text-foreground tracking-tight">
-              Shapeheart
-            </h1>
-            <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
-              Back Office
-            </p>
-          </div>
-        </Link>
+        {/* Logo */}
+        {logoHref ? (
+          <Link href={logoHref} className="flex items-center gap-3 shrink-0 group">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-white shadow-sm">
+              <BarChart3 className="h-4 w-4" />
+            </div>
+            <div className="hidden sm:block">
+              <h1 className="text-[13px] font-semibold leading-none text-foreground tracking-tight">
+                Shapeheart
+              </h1>
+              <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
+                Back Office
+              </p>
+            </div>
+          </Link>
+        ) : (
+          <a href="https://tech.shapeheart.fr" className="flex items-center gap-3 shrink-0 group">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 text-white shadow-sm">
+              <BarChart3 className="h-4 w-4" />
+            </div>
+            <div className="hidden sm:block">
+              <h1 className="text-[13px] font-semibold leading-none text-foreground tracking-tight">
+                Shapeheart
+              </h1>
+              <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
+                Back Office
+              </p>
+            </div>
+          </a>
+        )}
 
         {/* Show tracker nav only in tracker section */}
         {isTrackerSection && (

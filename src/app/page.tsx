@@ -16,7 +16,7 @@ export default function HomePage() {
     <div className="container mx-auto py-16 px-6 max-w-[1000px]">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold tracking-tight mb-3">
-          Shapeheart Back Office
+          Amazon Back Office
         </h1>
         <p className="text-lg text-muted-foreground">
           Sélectionnez un dashboard pour commencer
