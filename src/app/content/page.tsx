@@ -446,21 +446,11 @@ export default function ContentPage() {
       { id: "sku", label: "SKU", type: "fixed", defaultWidth: COL_DEFAULTS.sku },
       { id: "parentAsin", label: "Parent ASIN", type: "fixed", defaultWidth: COL_DEFAULTS.parentAsin },
       { id: "variation", label: "Variation", type: "fixed", defaultWidth: COL_DEFAULTS.variation },
-    ];
-    // One column per variation dimension (e.g. "Size", "Color")
-    for (const dim of variationDimensions) {
-      cols.push({
-        id: `var_${dim}`,
-        label: dim,
-        type: "variation",
-        dimension: dim,
-        defaultWidth: VARIATION_DEFAULT_W,
-      });
-    }
-    cols.push(
       { id: "titre", label: "Titre", type: "fixed", defaultWidth: COL_DEFAULTS.titre },
-    );
-    for (let i = 0; i < maxImages; i++) {
+      { id: "lastUpdate", label: "Dernière MAJ", type: "fixed", defaultWidth: COL_DEFAULTS.lastUpdate },
+    ];
+    const imgCount = Math.max(maxImages, 8);
+    for (let i = 0; i < imgCount; i++) {
       cols.push({
         id: `img_${i}`,
         label: i === 0 ? "Image principale" : `Image ${i + 1}`,
@@ -469,7 +459,8 @@ export default function ContentPage() {
         defaultWidth: IMG_DEFAULT_W,
       });
     }
-    for (let i = 0; i < maxBullets; i++) {
+    const bulletCount = Math.max(maxBullets, 5);
+    for (let i = 0; i < bulletCount; i++) {
       cols.push({
         id: `bullet_${i}`,
         label: `Bullet ${i + 1}`,
@@ -478,14 +469,8 @@ export default function ContentPage() {
         defaultWidth: BULLET_DEFAULT_W,
       });
     }
-    cols.push({
-      id: "lastUpdate",
-      label: "Dernière MAJ",
-      type: "fixed",
-      defaultWidth: COL_DEFAULTS.lastUpdate,
-    });
     return cols;
-  }, [maxImages, maxBullets, variationDimensions]);
+  }, [maxImages, maxBullets]);
 
   // Column order
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
